@@ -1,0 +1,18 @@
+# Scraping & APIs
+requests
+beautifulsoup4
+selenium        # For dynamic content like Goodreads reviews
+ebooklib        # To parse EPUB metadata
+
+# Cloud & Database
+boto3           # AWS S3 integration
+pymongo[srv]    # MongoDB Atlas driver
+
+# Data Transformation
+pandas          # For DataFrame manipulation
+pydantic        # For schema validation (ensures data matches MongoDB)
+
+# Utilities
+python-dotenv   # To keep S3/Mongo keys out of your code
+loguru          # High-quality logging for tracking pipeline health
+slugify
