@@ -43,6 +43,13 @@ class MongoHandler:
                     cls._instance.authors = db.authors
                     cls._instance.genres = db.genres
                     
+                    # --- ADD INDEXES FOR PERFORMANCE ---
+                    cls._instance.books.create_index("slug", unique=True)
+                    cls._instance.authors.create_index("slug", unique=True)
+                    cls._instance.genres.create_index("slug", unique=True)
+                    
+                    logger.info("MongoDB Connected: Indexes Verified.")
+
                     logger.info("Successfully connected to MongoDB and initialized collections.")
                 except Exception as e:
                     logger.critical(f"MongoDB Connection Failed: {e}")
@@ -119,6 +126,8 @@ class MongoHandler:
             # 2. Extract slug for the unique check
             slug = book_data.get('slug')
 
+            is_pick = book_data.pop('editorPick', False)
+
             # 3. Use find_one_and_update for Upsert
             result = self.books.find_one_and_update(
                 {"slug": slug},
@@ -128,6 +137,7 @@ class MongoHandler:
                         "updatedAt": datetime.utcnow()
                     },
                     "$setOnInsert": {
+                        "editorPick": is_pick,
                         "createdAt": datetime.utcnow(),
                         "__v": 0
                     }

@@ -1,3 +1,4 @@
+import uuid
 import requests
 from bs4 import BeautifulSoup
 from loguru import logger
@@ -66,29 +67,9 @@ class GutenbergProvider:
 
         # Use CLEANED name for the description search
         cleaned = self._clean_author_name(data["author_name"])
-        data["description"] = self.fetch_book_description(data["title"], cleaned)
         
         return data
 
-    def fetch_book_description(self, title, author):
-        """Corrected Wikipedia book search logic."""
-        try:
-            # We search for "Title Author novel" to get better accuracy
-            query = f"{title} {author} novel"
-            search_url = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={query}&limit=1&format=json"
-            response = requests.get(search_url, headers=self.headers, timeout=5)
-            
-            if response.status_code == 200 and response.text.strip():
-                search_res = response.json()
-                if len(search_res) > 1 and len(search_res[1]) > 0:
-                    page_title = search_res[1][0].replace(" ", "_")
-                    wiki_api = f"https://en.wikipedia.org/api/rest_v1/page/summary/{page_title}"
-                    wiki_res = requests.get(wiki_api, headers=self.headers, timeout=5)
-                    if wiki_res.status_code == 200:
-                        return wiki_res.json().get("extract", "")
-        except Exception as e:
-            logger.warning(f"Wikipedia book lookup failed: {e}")
-        return ""
 
     def fetch_author_extra_details(self, author_name):
         """Corrected Wikipedia author biography logic."""
@@ -115,24 +96,6 @@ class GutenbergProvider:
             pass
         return fallback
 
-    def fetch_genre_description(self, genre_name):
-        """Fetches a brief summary of a genre/subject from Wikipedia."""
-        try:
-            # We search for the genre name directly
-            search_url = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={genre_name}&limit=1&format=json"
-            response = requests.get(search_url, headers=self.headers, timeout=5)
-            
-            if response.status_code == 200 and response.text.strip():
-                search_res = response.json()
-                if len(search_res) > 1 and len(search_res[1]) > 0:
-                    page_title = search_res[1][0].replace(" ", "_")
-                    wiki_api = f"https://en.wikipedia.org/api/rest_v1/page/summary/{page_title}"
-                    wiki_res = requests.get(wiki_api, headers=self.headers, timeout=5)
-                    if wiki_res.status_code == 200:
-                        return wiki_res.json().get("extract", "")
-        except Exception as e:
-            logger.warning(f"Wikipedia genre lookup failed for {genre_name}: {e}")
-        return f"A collection of books under the {genre_name} category."
 
     def parse_epub_details(self, local_path):
         chapters, page_count, first_paragraph = [], 0, ""
@@ -157,13 +120,14 @@ class GutenbergProvider:
 
     def download_asset(self, url, folder, is_cover=False):  # <-- Added is_cover here
             os.makedirs(folder, exist_ok=True)
-            filename = url.split('/')[-1]
             
             if is_cover:
-                # Change extension so S3/Local storage knows it's a webp
-                filename = filename.replace('.jpg', '.webp').replace('.jpeg', '.webp')
-                if not filename.endswith('.webp'):
-                    filename += '.webp'
+                    # FIX: Generate a clean, random unique name for the cover 
+                    # to avoid Windows "Invalid Argument" errors from URL symbols
+                    filename = f"cover_{uuid.uuid4().hex[:10]}.webp"
+            else:
+                # Standard Gutenberg behavior for EPUB files
+                filename = url.split('/')[-1]
         
             path = os.path.join(folder, filename)
             
@@ -171,7 +135,7 @@ class GutenbergProvider:
             for attempt in range(max_retries):
                 try:
                     # We use stream=True for large EPUBs, but for covers we grab the whole content
-                    with requests.get(url, stream=True, timeout=20) as r:
+                    with requests.get(url, stream=True, timeout=20, headers=self.headers) as r:
                         r.raise_for_status()
                         
                         if is_cover:
