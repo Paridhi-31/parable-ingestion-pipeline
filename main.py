@@ -126,7 +126,7 @@ def run_ingestion(gutenberg_id):
                 logger.warning(f"Could not process author pic for {author_name}: {e}")
         
         if not s3_author_url:
-             s3_author_url = "https://your-s3-bucket.s3.amazonaws.com/placeholders/author-default.webp"
+             s3_author_url = f"https://ui-avatars.com/api/?name={author_name.replace(' ', '+')}&background=random&color=fff&size=512"
 
         author_payload = transform.prepare_author_payload(author_name, wiki_data, s3_author_url)
         author_id = mongo.upsert_author(author_payload)
@@ -171,10 +171,21 @@ def run_ingestion(gutenberg_id):
         logger.debug("Step 5: Saving Book to MongoDB...")
         # Requirement 6: Fetch ISBN explicitly before payload preparation
         # We call the provider here so the data is fresh
-        isbn_value = gb_provider.fetch_isbn(book_title, author_name)
-        raw_data['isbn'] = isbn_value # Ensure it's in raw_data for the transformer
+        # 1. Fetch raw ISBN from waterfalls
+        raw_isbn = gb_provider.fetch_isbn(book_title, author_name)
+        
+        # 2. Apply Safety Logic: Concatenate Gutenberg ID to handle collisions
+        # If raw_isbn is "9781234567890", final_isbn becomes "9781234567890-1007"
+        # If raw_isbn is None, final_isbn becomes "GUT-1007"
+        if raw_isbn:
+            final_isbn = f"{raw_isbn}-{gutenberg_id}"
+        else:
+            final_isbn = f"GUT-{gutenberg_id}"
+
+        # 3. Update raw_data so the Transformer picks up the unique string
+        raw_data['isbn'] = final_isbn
         book_payload = transform.prepare_book_payload(raw_data, author_id, genre_ids, s3_urls)
-        book_payload['isbn'] = isbn_value
+        book_payload['isbn'] = final_isbn
         book_payload['publicationDate'] = final_pub_date
         book_payload['editorPick'] = raw_data['editorPick']
         book_id = mongo.insert_book(book_payload) 
@@ -223,8 +234,8 @@ if __name__ == "__main__":
         with open("data/processed_successfully.txt", "r") as f:
             processed_ids = {line.strip() for line in f}
 
-    start_id = 1007
-    end_id = 2000
+    start_id = 4001
+    end_id = 4300
     #start_id = 74000
     #end_id = 75000
     gutenberg_ids = [
@@ -242,7 +253,7 @@ if __name__ == "__main__":
     db_handler = MongoHandler() 
     # --------------------------
 
-    MAX_WORKERS = 5 
+    MAX_WORKERS = 6
     
     logger.info(f"🚀 Starting Bulk Ingestion: {start_id} to {end_id}")
     

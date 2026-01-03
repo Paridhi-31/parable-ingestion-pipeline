@@ -40,8 +40,7 @@ class Transformer:
         }
 
     def prepare_book_payload(self, raw_data, author_id, genre_ids, s3_urls):
-        raw_isbn = raw_data.get('isbn')
-        isbn = str(raw_isbn) if raw_isbn and str(raw_isbn).strip() else None
+        isbn = raw_data.get('isbn')
         return {
             "title": raw_data['title'],
             "slug": self.generate_slug(raw_data['title']),
